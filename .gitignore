@@ -1,0 +1,25 @@
+# Internal working notes: kept next to the project, deliberately NOT published.
+# REVIEW_FIXPLAN.md is the private code-review log. It carries local filesystem paths, a
+# record of how the live deployment drifted from git, and defect statuses that were true
+# when written and are now fixed in the code -- a stranger reading it would conclude the
+# software is unsafe in ways it no longer is.
+REVIEW_FIXPLAN.md
+
+# Real runtime config + secrets — NEVER commit (only the *.example files are tracked)
+config.env
+secrets.yaml
+*.secret
+
+# backups / originals
+*.bak
+*.bak-*
+*.orig
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+.DS_Store
+.idea/
+.vscode/

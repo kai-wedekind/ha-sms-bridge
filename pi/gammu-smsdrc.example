@@ -1,0 +1,24 @@
+# gammu-smsd config for ha-sms-bridge (bidirectional SMS over a USB modem).
+# Copy to /etc/gammu-smsdrc, set device + pin, then: systemctl enable --now gammu-smsd
+# SECURITY: this file holds the SIM PIN -> `chmod 600 /etc/gammu-smsdrc`, owner root.
+[gammu]
+device = /dev/ttyUSB0
+connection = at
+# SIM PIN -- CHANGE THIS (leave blank if the SIM has no PIN):
+pin = <YOUR_SIM_PIN>
+synchronizetime = yes
+
+[smsd]
+service = files
+logfile = /var/log/gammu-smsd.log
+debuglevel = 0
+# Spool dirs. Received SMS are ALSO kept here as files, so an MQTT hiccup never
+# loses an inbound message (it stays in inboxpath until cleared).
+inboxpath = /var/spool/gammu/inbox/
+outboxpath = /var/spool/gammu/outbox/
+sentsmspath = /var/spool/gammu/sent/
+errorsmspath = /var/spool/gammu/error/
+# gammu-smsd already concatenates multipart inbound and exposes the decoded text to
+# the hook in DECODED_n_TEXT. Publish each received SMS to MQTT:
+RunOnReceive = /opt/ha-sms-bridge/run_on_receive.sh
+checksecurity = 0

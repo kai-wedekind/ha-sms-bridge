@@ -1,0 +1,56 @@
+# ha-sms-bridge — Home Assistant side.
+# Inbound SMS as a sensor + a reusable outbound script. RAW CHANNEL ONLY — no alert
+# automations are wired here (intentionally left to the user).
+#
+# Install: drop in config/packages/ (needs `homeassistant: packages: !include_dir_named packages`),
+# add `sms_bridge_token: <the SHARED_SECRET>` to secrets.yaml, and reload. Requires the MQTT
+# integration pointed at the same broker as the Pi bridge.
+
+mqtt:
+  sensor:
+    - name: "SMS inbound"
+      unique_id: sms_inbound_last
+      icon: mdi:message-text
+      state_topic: "clouds/sms/inbound"
+      # HA caps a sensor STATE at 255 chars -> a long/multipart inbound SMS would fail the state
+      # update. Truncate the state; the full text is available in the 'text' attribute.
+      value_template: "{{ value_json.text[:255] }}"
+      json_attributes_topic: "clouds/sms/inbound"
+      # attributes: from, text (full), ts, parts
+
+    - name: "SMS send result"
+      unique_id: sms_send_result
+      icon: mdi:message-check
+      state_topic: "clouds/sms/send/result"
+      # surfaces the bridge's send outcome so a rate-limited / rejected / failed send is visible in HA
+      value_template: >-
+        {{ 'ok' if value_json.ok else ('error: ' ~ (value_json.error | default('failed'))) }}
+      json_attributes_topic: "clouds/sms/send/result"
+      # attributes: ok, to, segments, detail, error
+
+  binary_sensor:
+    - name: "SMS bridge online"
+      unique_id: sms_bridge_online
+      state_topic: "clouds/sms/bridge/status"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+
+script:
+  send_sms:
+    alias: "Send SMS (via Pi LTE bridge)"
+    description: "Reusable outbound primitive — publishes one SMS request to the bridge. No automations attached."
+    fields:
+      number:
+        description: "Recipient in E.164 (e.g. +49...)"
+        example: "+491701234567"
+      message:
+        description: "Message text"
+        example: "Hallo from Home Assistant"
+    variables:
+      tok: !secret sms_bridge_token
+    sequence:
+      - service: mqtt.publish
+        data:
+          topic: "clouds/sms/send"
+          payload: '{{ {"to": number, "message": message, "token": tok} | to_json }}'

@@ -1,0 +1,32 @@
+[Unit]
+Description=ha-sms-bridge: MQTT -> SMS bridge (outbound)
+After=network-online.target gammu-smsd.service
+Wants=network-online.target gammu-smsd.service
+
+[Service]
+Type=simple
+EnvironmentFile=/opt/ha-sms-bridge/config.env
+ExecStart=/opt/ha-sms-bridge/venv/bin/python /opt/ha-sms-bridge/sms_mqtt_bridge.py
+Restart=always
+RestartSec=10
+# Hardening. NoNewPrivileges stays on in BOTH modes -- see the note below; running
+# unprivileged does not require sudo, so nothing here has to be weakened.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=yes
+ProtectControlGroups=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# To run UNPRIVILEGED (recommended, see README): create a dedicated system user, add it
+# to group gammu, make /etc/gammu-smsdrc and config.env group-readable, chown the state
+# dir, then uncomment the two lines below. NO sudoers entry and NO WRAPPER_SUDO: the spool
+# is group-writable and gammu-smsd-inject is world-executable, so group membership is the
+# entire permission required -- which is why NoNewPrivileges can stay on.
+#User=smsbridge
+#Group=gammu
+
+[Install]
+WantedBy=multi-user.target

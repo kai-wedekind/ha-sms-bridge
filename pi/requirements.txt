@@ -1,0 +1,3 @@
+# Pin paho-mqtt to the 1.x line: the bridge uses the v1 callback API, and a plain
+# `pip install paho-mqtt` now pulls 2.x (incompatible Client() signature).
+paho-mqtt>=1.6,<2.0

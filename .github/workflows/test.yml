@@ -1,0 +1,85 @@
+name: Test
+
+# The suite stubs paho itself and pins tiny caps plus a temp state file before importing
+# the bridge, so it needs no broker, no modem and no dependencies -- which is why this can
+# run on every push across several Python versions in seconds.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    name: unit tests (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Money-logic, retain guard, rate persistence
+        run: python tests/test_sms_bridge.py
+
+  static:
+    name: compile + config sanity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Every Pi script compiles
+        run: python -m compileall -q pi/
+
+      # PyYAML is NOT preinstalled on the runner, unlike a typical dev box -- a local
+      # dry-run of this step passes and CI then fails with ModuleNotFoundError.
+      - name: Install YAML parser
+        run: pip install --quiet pyyaml
+
+      - name: Home Assistant package parses
+        run: |
+          python - <<'EOF'
+          import sys, yaml
+          # HA's !secret / !include are custom tags; safe_load rejects them, so a plain
+          # parse would fail on a valid package and this check would be worse than none.
+          class L(yaml.SafeLoader):
+              pass
+          L.add_multi_constructor("!", lambda loader, suffix, node: None)
+          doc = yaml.load(open("homeassistant/packages/sms_bridge.yaml"), Loader=L)
+          assert isinstance(doc, dict) and doc, "package is empty or not a mapping"
+          print("package keys:", ", ".join(sorted(doc)))
+          EOF
+
+      - name: Shell wrapper is syntactically valid
+        run: bash -n pi/run_on_receive.sh
+
+      - name: No real credentials or numbers committed
+        run: |
+          python - <<'EOF'
+          import pathlib, re, sys
+          # Placeholders are fine; anything that looks like a live number, PIN or token is not.
+          bad = re.compile(r"\+49\s?1[5-7]\d[\s/-]?\d{6,}|PIN\s*=\s*\d{4}\b")
+          allow = re.compile(r"1234567|1701234567|<YOUR|CHANGE_ME|example", re.I)
+          hits = []
+          for p in pathlib.Path(".").rglob("*"):
+              if p.is_dir() or ".git" in p.parts:
+                  continue
+              try:
+                  text = p.read_text(encoding="utf-8", errors="ignore")
+              except OSError:
+                  continue
+              for m in bad.finditer(text):
+                  if not allow.search(m.group(0)):
+                      hits.append(f"{p}: {m.group(0)}")
+          if hits:
+              print("POSSIBLE REAL CREDENTIALS COMMITTED:")
+              print("\n".join(hits))
+              sys.exit(1)
+          print("no real-looking credentials found")
+          EOF
